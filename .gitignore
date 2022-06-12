@@ -1,0 +1,4 @@
+pocket-export.html
+.env
+build/
+*.egg-info
