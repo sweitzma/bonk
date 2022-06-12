@@ -1,10 +1,25 @@
 import subprocess
+from time import time
+from collections import defaultdict
 from tempfile import TemporaryDirectory
+from enum import IntFlag
 
 import click
+from rich import print
+from rich.console import Console
 from rich.prompt import Prompt
 
-from bonk import read, persist
+from bonk import persist
+from bonk import read as read_entries
+
+
+console = Console()
+
+
+class Marks(IntFlag):
+    READ = 1
+    FAVORITE = 2
+    ARCHIVE = 4
 
 
 @click.group()
@@ -12,17 +27,28 @@ def cli():
     ...
 
 @cli.command()
-def ls():
+@click.option('-r', '--read', is_flag=True, default=False)
+def ls(read):
     """
     List out saved data.
-
-
-    [TAG]
     """
-    data = read()
+    data = read_entries()
     print(f"Bonk contains {len(data)} entries:")
+
+    by_tag = defaultdict(list)
+
     for entry in data:
-        print(f" * {entry}")
+        if read and Marks.READ not in Marks(entry['marks']):
+            continue
+
+        for tag in entry['tags']:
+            by_tag[tag].append(entry)
+
+    for tag, entries in by_tag.items():
+        console.print(f"[bold]{tag.upper() or 'UNTAGGED'}", justify='center')
+        for entry in entries:
+            console.print(f"- [link={entry['url']}]{entry['title']}[/link]")
+        print()
 
 @cli.command()
 def add():
@@ -30,8 +56,11 @@ def add():
 
     entry = {}
     entry['title'] = Prompt.ask("[bold]Title")
-    entry['tags'] = Prompt.ask("[bold]Tags")
+    entry['tags'] = ['testing']
     entry['url'] = Prompt.ask('[bold]URL')
+    entry['marks'] = 0
+    entry['created_at'] = int(time())
+    entry['updated_at'] = entry['created_at']
 
     data.append(entry)
 

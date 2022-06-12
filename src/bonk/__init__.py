@@ -10,7 +10,7 @@ BONK_NOTE_DIR = BONK_DIR / 'notes'
 
 def persist(obj):
     with open(BONK_DB_FILE, 'w') as f:
-        json.dump(obj, f)
+        json.dump(obj, f, indent=2)
 
 
 def read():
