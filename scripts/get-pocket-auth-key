@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# For more info see:
+#   https://getpocket.com/developer/docs/authentication
+
+set -euo pipefail
+
+req_oauth() {
+  curl -s -X POST \
+    --header 'X-Accept: application/json' \
+    "https://getpocket.com/v3/oauth/request?consumer_key=$1&redirect_uri=http://canireachthe.net/"
+}
+
+req_access_token() {
+  curl -s -X POST \
+    --header 'X-Accept: application/json' \
+    "https://getpocket.com/v3/oauth/authorize?consumer_key=$1&code=$2"
+
+}
+
+# load .env
+export $(cat .env | xargs)
+
+# Step 2: Obtain a request token 
+OAUTH_CODE=$(req_oauth "$POCKET_CONSUMER_KEY" | jq -r .code)
+
+# Step 3: Redirect user to Pocket to continue authorization
+echo "Go to the following URL to continue authorization:"
+echo ""
+echo "    https://getpocket.com/auth/authorize?request_token=${OAUTH_CODE}&redirect_uri=http://canireachthe.net"
+
+# Step 4: Receive the callback from Pocket
+echo ""
+echo "Press enter when you've accepted the authorization request:"
+read
+
+# Step 5: Convert a request token into a Pocket access token
+access_json=$(req_access_token "$POCKET_CONSUMER_KEY" "$OAUTH_CODE")
+
+# Step 6: Print results
+echo "Success!"
+echo ""
+echo "[Access Token]"
+echo ""
+echo $access_json | jq

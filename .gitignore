@@ -1,4 +1,6 @@
-pocket-export.html
-.env
-build/
 *.egg-info
+.env
+.venv
+__pycache__
+build/
+pocket-export.html
