@@ -6,6 +6,8 @@ a simple web UI.
 
 I recently found [pocket-cli](https://github.com/rakanalh/pocket-cli) and will almost certainly be drawing inspriration from here.
 
+![](bonk_cli_img.png)
+
 ## API
 ```
 # Articles
