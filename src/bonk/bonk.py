@@ -1,26 +1,21 @@
 import subprocess
-from time import time
 from collections import defaultdict
 from tempfile import TemporaryDirectory
-from enum import IntFlag
-from hashlib import sha256
 from random import sample
 
 import toml
 import click
-import rich
 from rich import print
 from rich.console import Console
-from rich.prompt import Prompt
 from rich.panel import Panel
 
 from bonk import persist
 from bonk import read as read_entries
-from bonk.entry import Entry
+from bonk.entry import Entry, user_defined_entry
+from bonk.marks import Marks
 
 
-def compute_id(entry):
-    return sha256(entry['url'].encode()).hexdigest()
+console = Console(soft_wrap=True)
 
 
 def safe_sample(l, n):
@@ -28,19 +23,10 @@ def safe_sample(l, n):
     return sample(l, n)
 
 
-console = Console(soft_wrap=True)
-
-
-class Marks(IntFlag):
-    ANY = 1
-    READ = 2
-    FAVORITE = 4
-    ARCHIVE = 8
-
-
 @click.group()
 def cli():
     ...
+
 
 @cli.command()
 @click.option('-r', '--read', is_flag=True, default=False)
@@ -126,25 +112,8 @@ def rand(read, favorite, id, num):
 @cli.command()
 def add():
     data = read_entries()
-
-    entry = {}
-
-    # prompt
-    entry['title'] = Prompt.ask("[b]title")
-    entry['url'] = Prompt.ask('[b]url')
-
-    entry['tags'] = ['testing']
-    entry['marks'] = Marks.ANY
-
-    entry['created_at'] = int(time())
-    entry['updated_at'] = entry['created_at']
-    entry['id'] = compute_id(entry)
-
+    entry = user_defined_entry()
     data.append(entry)
-
-    # create id
-    # prompt for notes
-    # promot for marks
     persist(data)
 
 
@@ -217,4 +186,10 @@ def edit(id):
 
     persist(entries)
 
+# functions
+#  - find by ID
+#  - filter by marks
 
+# api additions
+#  - bonk tags
+#  - bonk ls -t <tag>
