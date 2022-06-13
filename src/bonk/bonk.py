@@ -3,9 +3,8 @@ from time import time
 from collections import defaultdict
 from tempfile import TemporaryDirectory
 from enum import IntFlag
-from inspect import cleandoc
 from hashlib import sha256
-from datetime import datetime
+from random import sample
 
 import toml
 import click
@@ -17,10 +16,16 @@ from rich.panel import Panel
 
 from bonk import persist
 from bonk import read as read_entries
+from bonk.entry import Entry
 
 
 def compute_id(entry):
     return sha256(entry['url'].encode()).hexdigest()
+
+
+def safe_sample(l, n):
+    n = min(len(l), n)
+    return sample(l, n)
 
 
 console = Console(soft_wrap=True)
@@ -43,7 +48,7 @@ def cli():
 @click.option('--id', is_flag=True, default=False)
 def ls(read, favorite, id):
     """
-    List out saved data.
+    list out saved data.
     """
 
     data = read_entries()
@@ -66,25 +71,57 @@ def ls(read, favorite, id):
 
         filtered_data.append(entry)
 
-    console.print(f"Bonk showing {len(filtered_data)} of {len(data)} entries.\n")
+    console.print(f"bonk showing {len(filtered_data)} of {len(data)} entries.\n")
 
     for entry in filtered_data:
         for tag in entry['tags']:
             by_tag[tag].append(entry)
 
     for tag, entries in by_tag.items():
-        tag_text = f"[b i blue]{tag.upper() or 'UNTAGGED'}"
+        tag_text = f"[b i blue]{tag.upper() or 'untagged'}"
 
         panel_text = "\n"
         for entry in sorted(entries, key=lambda x : x['created_at']):
-            at = datetime.fromtimestamp(entry['created_at'])
-            at_text = at.strftime("[green dim]%b %Y[/]")
-            if id:
-                panel_text += f"[i red]{entry['id'][:6]}[/]  "
-            panel_text += f"{at_text}  [link={entry['url']}]{entry['title']}[/link]\n"
+            panel_text += Entry(**entry).short_view(id) + "\n"
 
         console.print(Panel(panel_text, title=tag_text))
         print("\n")
+
+
+@cli.command()
+@click.option('-r', '--read', is_flag=True, default=False)
+@click.option('-f', '--favorite', is_flag=True, default=False)
+@click.option('--id', is_flag=True, default=False)
+@click.option('-n', '--num', default=3)
+def rand(read, favorite, id, num):
+    """
+    Return random sample of entries.
+    """
+
+    data = read_entries()
+    filtered_data = []
+    for entry in data:
+        marks = Marks(entry['marks'])
+
+        # by default filter out read entries
+        if not read and Marks.READ in marks:
+            continue
+
+        # filter
+        if read and not Marks.READ in marks:
+            continue
+        if favorite and not Marks.FAVORITE in marks:
+            continue
+
+        filtered_data.append(entry)
+
+    filtered_data = safe_sample(filtered_data, num)
+
+    console.print()
+    for entry in filtered_data:
+        console.print(Entry(**entry).long_view())
+        console.print()
+
 
 @cli.command()
 def add():
@@ -92,9 +129,9 @@ def add():
 
     entry = {}
 
-    # Prompt
-    entry['title'] = Prompt.ask("[b]Title")
-    entry['url'] = Prompt.ask('[b]URL')
+    # prompt
+    entry['title'] = Prompt.ask("[b]title")
+    entry['url'] = Prompt.ask('[b]url')
 
     entry['tags'] = ['testing']
     entry['marks'] = Marks.ANY
@@ -105,7 +142,7 @@ def add():
 
     data.append(entry)
 
-    # create ID
+    # create id
     # prompt for notes
     # promot for marks
     persist(data)
@@ -115,7 +152,7 @@ def add():
 @click.argument('id')
 def rm(id):
     if len(id) < 6:
-        print("Error, must specify an ID of at least 6 characters")
+        print("error, must specify an id of at least 6 characters")
         return
 
     entries = read_entries()
@@ -123,14 +160,14 @@ def rm(id):
     none_found = True
     for idx, e in enumerate(entries):
         if e['id'].startswith(id):
-            console.print(f"[b]Deleted entry[/] [i red]{id}")
+            console.print(f"[b]deleted entry[/] [i red]{id}")
             console.print(entries[idx])
             del entries[idx]
             none_found = False
             break
 
     if none_found:
-        print("[yellow]No records found to delete.")
+        print("[yellow]no records found to delete.")
 
     persist(entries)
 
@@ -148,7 +185,7 @@ def mark():
 @click.argument('id')
 def edit(id):
     if len(id) < 6:
-        print("Error, must specify an ID of at least 6 characters")
+        print("error, must specify an id of at least 6 characters")
         return
 
     entries = read_entries()
@@ -169,14 +206,14 @@ def edit(id):
                 with open(file_name) as f:
                     new_e = toml.load(f)
 
-                # TODO: validate
+                # todo: validate
                 entries[idx] = new_e
 
             none_found = False
             break
 
     if none_found:
-        print("[yellow]No records found to delete.")
+        print("[yellow]no records found to delete.")
 
     persist(entries)
 
