@@ -2,6 +2,7 @@ import subprocess
 from collections import defaultdict
 from tempfile import TemporaryDirectory
 from random import sample
+from typing import Union
 
 import toml
 import click
@@ -14,6 +15,8 @@ from bonk import persist_json, persist_entries
 from bonk import read_json, read_entries
 from bonk.entry import Entry, user_defined_entry, NON_HUMAN_EDITABLE_FIELDS
 
+
+CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 console = Console(soft_wrap=True)
 
@@ -36,6 +39,23 @@ def filter_entries(entries: list[Entry], favorite: bool = False, read: bool = Fa
     return filtered_entries
 
 
+def filter_by_tags(entries: list[Entry], tags: list[str]):
+    if len(tags) == 0:
+        return entries
+
+    tag_set = set([t.lower() for t in tags])
+    add_untagged = "untagged" in tag_set
+    filtered_entries = []
+    for e in entries:
+        etags = set([t.lower() for t in e.tags])
+        if tag_set & etags:
+            filtered_entries.append(e)
+        elif add_untagged and len(etags) == 0:
+            filtered_entries.append(e)
+
+    return filtered_entries
+
+
 def find_by_id(entries: list[Entry], id_prefix: str):
     if len(id_prefix) < 6:
         raise ValueError("ID prefix must be at least 6 characters.")
@@ -53,7 +73,7 @@ def find_by_id(entries: list[Entry], id_prefix: str):
         raise ValueError("ID prefix corresponds with multiple entries.")
 
 
-@click.group()
+@click.group(context_settings=CONTEXT_SETTINGS)
 def cli():
     ...
 
@@ -61,14 +81,16 @@ def cli():
 @cli.command()
 @click.option("-r", "--read", is_flag=True, default=False)
 @click.option("-f", "--favorite", is_flag=True, default=False)
-@click.option("--id", is_flag=True, default=False)
-def ls(read, favorite, id):
+@click.option("-i", "--id", is_flag=True, default=False)
+@click.option("-t", "--with-tags", required=False, multiple=True)
+def ls(read, favorite, id, with_tags):
     """
     List all entries, ordered by tags.
     """
     entries = read_entries()
     all_entries_size = len(entries)
     entries = filter_entries(entries, read=read, favorite=favorite)
+    entries = filter_by_tags(entries, with_tags)
     filtered_entries_size = len(entries)
     console.print(
         f"bonk showing {filtered_entries_size} of {all_entries_size} entries.\n"
@@ -115,6 +137,9 @@ def rand(read, favorite, num):
 
 @cli.command()
 def add():
+    """
+    Interactively add a new entry.
+    """
     data = read_json()
     entry = user_defined_entry()
     console.print(entry.long_view())
@@ -125,6 +150,9 @@ def add():
 @cli.command()
 @click.argument("id")
 def rm(id):
+    """
+    Delete an entry by ID.
+    """
     entries = read_entries()
     try:
         idx, entry = find_by_id(entries, id)
@@ -146,6 +174,9 @@ def rm(id):
 @cli.command()
 @click.argument("id")
 def edit(id):
+    """
+    Edit an entry by ID.
+    """
     entries = read_entries()
     try:
         idx, entry = find_by_id(entries, id)
@@ -195,6 +226,9 @@ def edit(id):
 @click.argument("id")
 @click.option("-r", "--raw", is_flag=True, default=False)
 def view(id, raw):
+    """
+    View an entry by ID.
+    """
     entries = read_entries()
     try:
         idx, entry = find_by_id(entries, id)
@@ -214,6 +248,9 @@ def view(id, raw):
 
 @cli.command()
 def tags():
+    """
+    View tags.
+    """
     entries = read_entries()
     by_tag, untagged = defaultdict(int), 0
     for entry in entries:
