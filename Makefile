@@ -5,4 +5,4 @@ install:
 .PHONY: dev-install
 dev-install:
 	@python -m venv .venv
-	@. .venv/bin/activate ; pip install -e .
+	@. .venv/bin/activate ; pip install -e .[test]

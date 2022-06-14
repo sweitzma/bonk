@@ -10,6 +10,9 @@ from rich.prompt import Prompt, Confirm
 from bonk.marks import Marks
 
 
+NON_HUMAN_EDITABLE_FIELDS = ["id", "created_at", "updated_at", "note_file"]
+
+
 @dataclass
 class Entry:
     title: str
@@ -19,6 +22,7 @@ class Entry:
     created_at: int
     updated_at: int
     id: str
+    description: object = None
     metadata: object = None
     note_file: Union[str, None] = None
 
@@ -34,13 +38,13 @@ class Entry:
     def created_at_view(self):
         fmt = "%b %Y"
         at = datetime.fromtimestamp(self.created_at)
-        return at.strftime(f"[i green]{fmt}[/]") 
+        return at.strftime(f"[i green]{fmt}[/]")
 
     @property
     def created_at_long_view(self):
         fmt = "%B %d, %Y"
         at = datetime.fromtimestamp(self.created_at)
-        return at.strftime(f"[i green]{fmt}[/]") 
+        return at.strftime(f"[i green]{fmt}[/]")
 
     @property
     def tag_view(self):
@@ -48,8 +52,19 @@ class Entry:
         tag_text = ", ".join(tags)
         return tag_text
 
+    @property
+    def is_read(self):
+        return self.is_marked_with(Marks.READ)
+
+    @property
+    def is_favorite(self):
+        return self.is_marked_with(Marks.FAVORITE)
+
     def validate(self):
         ...
+
+    def is_marked_with(self, mark: Marks):
+        return mark in Marks(self.marks)
 
     def short_view(self, show_id=False):
         if show_id:
@@ -87,22 +102,28 @@ class Entry:
         text += "\n"
         return Panel(text, title=title)
 
+    def to_dict(self):
+        return asdict(self)
+
+    def set_updated_at(self):
+        self.updated_at = int(time())
+
 
 def compute_id(entry):
-    return sha256(entry['url'].encode()).hexdigest()[:32]
+    return sha256(entry["url"].encode()).hexdigest()[:32]
 
 
 def user_defined_entry():
-    data={}
+    data = {}
 
-    data['title'] = Prompt.ask("[b]Title")
-    data['url'] = Prompt.ask('[b]URL')
-    
+    data["title"] = Prompt.ask("[b]Title")
+    data["url"] = Prompt.ask("[b]URL")
+
     add_tags = True
-    data['tags'] = []
+    data["tags"] = []
     while add_tags:
-        new_tag = Prompt.ask('[b]Add tag')
-        data['tags'].append(new_tag)
+        new_tag = Prompt.ask("[b]Add tag")
+        data["tags"].append(new_tag)
         add_tags = Confirm.ask("Do you want to add another?")
 
     marks = Marks.ANY
@@ -110,11 +131,11 @@ def user_defined_entry():
         marks |= Marks.READ
     if Confirm.ask("Mark as favorite?"):
         marks |= Marks.FAVORITE
-    data['marks'] = int(marks)
+    data["marks"] = int(marks)
 
-    data['created_at'] = int(time())
-    data['updated_at'] = data['created_at']
-    data['id'] = compute_id(data)
+    data["created_at"] = int(time())
+    data["updated_at"] = data["created_at"]
+    data["id"] = compute_id(data)
 
     entry = Entry(**data)
     entry.validate()
@@ -123,4 +144,3 @@ def user_defined_entry():
     # TODO: show long view
 
     return entry_obj
-

@@ -5,14 +5,14 @@ from random import sample
 
 import toml
 import click
+from rich.columns import Columns
 from rich import print
 from rich.console import Console
 from rich.panel import Panel
 
-from bonk import persist
-from bonk import read as read_entries
-from bonk.entry import Entry, user_defined_entry
-from bonk.marks import Marks
+from bonk import persist_json, persist_entries
+from bonk import read_json, read_entries
+from bonk.entry import Entry, user_defined_entry, NON_HUMAN_EDITABLE_FIELDS
 
 
 console = Console(soft_wrap=True)
@@ -23,173 +23,225 @@ def safe_sample(l, n):
     return sample(l, n)
 
 
+def filter_entries(entries: list[Entry], favorite: bool = False, read: bool = False):
+    filtered_entries = []
+    for e in entries:
+        if read != e.is_read:
+            continue
+        elif favorite and not e.is_favorite:
+            continue
+
+        filtered_entries.append(e)
+
+    return filtered_entries
+
+
+def find_by_id(entries: list[Entry], id_prefix: str):
+    if len(id_prefix) < 6:
+        raise ValueError("ID prefix must be at least 6 characters.")
+
+    matching_indices = []
+    for idx, e in enumerate(entries):
+        if e.id.startswith(id_prefix):
+            matching_indices.append(idx)
+
+    if len(matching_indices) == 0:
+        return None, None
+    elif len(matching_indices) == 1:
+        return matching_indices[0], entries[matching_indices[0]]
+    else:
+        raise ValueError("ID prefix corresponds with multiple entries.")
+
+
 @click.group()
 def cli():
     ...
 
 
 @cli.command()
-@click.option('-r', '--read', is_flag=True, default=False)
-@click.option('-f', '--favorite', is_flag=True, default=False)
-@click.option('--id', is_flag=True, default=False)
+@click.option("-r", "--read", is_flag=True, default=False)
+@click.option("-f", "--favorite", is_flag=True, default=False)
+@click.option("--id", is_flag=True, default=False)
 def ls(read, favorite, id):
     """
-    list out saved data.
+    List all entries, ordered by tags.
     """
-
-    data = read_entries()
+    entries = read_entries()
+    all_entries_size = len(entries)
+    entries = filter_entries(entries, read=read, favorite=favorite)
+    filtered_entries_size = len(entries)
+    console.print(
+        f"bonk showing {filtered_entries_size} of {all_entries_size} entries.\n"
+    )
 
     by_tag = defaultdict(list)
+    for entry in entries:
+        if len(entry.tags) == 0:
+            by_tag["untagged"].append(entry)
+        else:
+            for tag in entry.tags:
+                by_tag[tag.lower()].append(entry)
 
-    filtered_data = []
-    for entry in data:
-        marks = Marks(entry['marks'])
-
-        # by default filter out read entries
-        if not read and Marks.READ in marks:
-            continue
-
-        # filter
-        if read and not Marks.READ in marks:
-            continue
-        if favorite and not Marks.FAVORITE in marks:
-            continue
-
-        filtered_data.append(entry)
-
-    console.print(f"bonk showing {len(filtered_data)} of {len(data)} entries.\n")
-
-    for entry in filtered_data:
-        for tag in entry['tags']:
-            by_tag[tag].append(entry)
-
-    for tag, entries in by_tag.items():
-        tag_text = f"[b i blue]{tag.upper() or 'untagged'}"
+    tag_order = sorted(by_tag.keys())
+    for tag in tag_order:
+        entries_w_tag = sorted(by_tag[tag], key=lambda e: e.created_at)
+        tag_text = f"[b i blue]{tag.upper()}"
 
         panel_text = "\n"
-        for entry in sorted(entries, key=lambda x : x['created_at']):
-            panel_text += Entry(**entry).short_view(id) + "\n"
+        for e in entries_w_tag:
+            panel_text += e.short_view(id) + "\n"
 
         console.print(Panel(panel_text, title=tag_text))
         print("\n")
 
 
 @cli.command()
-@click.option('-r', '--read', is_flag=True, default=False)
-@click.option('-f', '--favorite', is_flag=True, default=False)
-@click.option('--id', is_flag=True, default=False)
-@click.option('-n', '--num', default=3)
-def rand(read, favorite, id, num):
+@click.option("-r", "--read", is_flag=True, default=False)
+@click.option("-f", "--favorite", is_flag=True, default=False)
+@click.option("-n", "--num", default=3)
+def rand(read, favorite, num):
     """
     Return random sample of entries.
     """
-
-    data = read_entries()
-    filtered_data = []
-    for entry in data:
-        marks = Marks(entry['marks'])
-
-        # by default filter out read entries
-        if not read and Marks.READ in marks:
-            continue
-
-        # filter
-        if read and not Marks.READ in marks:
-            continue
-        if favorite and not Marks.FAVORITE in marks:
-            continue
-
-        filtered_data.append(entry)
-
-    filtered_data = safe_sample(filtered_data, num)
+    entries = read_entries()
+    entries = filter_entries(entries, read=read, favorite=favorite)
+    entries = safe_sample(entries, num)
 
     console.print()
-    for entry in filtered_data:
-        console.print(Entry(**entry).long_view())
+    for entry in entries:
+        console.print(entry.long_view())
         console.print()
 
 
 @cli.command()
 def add():
-    data = read_entries()
+    data = read_json()
     entry = user_defined_entry()
     data.append(entry)
-    persist(data)
+    persist_json(data)
 
 
 @cli.command()
-@click.argument('id')
+@click.argument("id")
 def rm(id):
-    if len(id) < 6:
-        print("error, must specify an id of at least 6 characters")
+    entries = read_entries()
+    try:
+        idx, entry = find_by_id(entries, id)
+    except ValueError as e:
+        print("[b red]ERROR:[/]", e)
         return
 
+    if idx is None or entry is None:
+        print("[yellow]No records found to delete.")
+        return
+
+    console.print(f"[b]deleted entry[/] {entry.id_view}")
+    console.print(entries[idx].to_dict())
+    del entries[idx]
+
+    persist_entries(entries)
+
+
+@cli.command()
+@click.argument("id")
+def edit(id):
     entries = read_entries()
+    try:
+        idx, entry = find_by_id(entries, id)
+    except ValueError as e:
+        print("[b red]ERROR:[/]", e)
+        return
 
-    none_found = True
-    for idx, e in enumerate(entries):
-        if e['id'].startswith(id):
-            console.print(f"[b]deleted entry[/] [i red]{id}")
-            console.print(entries[idx])
-            del entries[idx]
-            none_found = False
-            break
+    if idx is None or entry is None:
+        print("[yellow]No records found to delete.")
+        return
 
-    if none_found:
-        print("[yellow]no records found to delete.")
+    # remove some fields from editing
+    editable_dict = entry.to_dict()
+    add_back_in_dict = {}
+    for field in NON_HUMAN_EDITABLE_FIELDS:
+        add_back_in_dict[field] = editable_dict[field]
+        del editable_dict[field]
 
-    persist(entries)
+    with TemporaryDirectory() as dirname:
+        file_name = dirname + "/entry.toml"
+        with open(file_name, "w") as f:
+            toml.dump(editable_dict, f)
+
+        # open editor
+        command_line = ["nvim", file_name]
+        p = subprocess.Popen(command_line)
+        p.wait()
+
+        # read results back in
+        with open(file_name) as f:
+            edited_dict = toml.load(f)
+
+        # fill in non-editable fields
+        for k, v in add_back_in_dict.items():
+            edited_dict[k] = v
+
+        # create Entry object and bump timestamp
+        updated_entry = Entry(**edited_dict)
+        updated_entry.set_updated_at()
+        updated_entry.validate()
+        entries[idx] = updated_entry
+
+    persist_entries(entries)
+
+
+@cli.command()
+@click.argument("id")
+@click.option("-r", "--raw", is_flag=True, default=False)
+def view(id, raw):
+    entries = read_entries()
+    try:
+        idx, entry = find_by_id(entries, id)
+    except ValueError as e:
+        print("[b red]ERROR:[/]", e)
+        return
+
+    if idx is None or entry is None:
+        print("[yellow]No records found to delete.")
+        return
+
+    if raw:
+        console.print(entry.to_dict())
+    else:
+        console.print(entry.long_view())
+
+
+@cli.command()
+def tags():
+    entries = read_entries()
+    by_tag, untagged = defaultdict(int), 0
+    for entry in entries:
+        if len(entry.tags) == 0:
+            untagged += 1
+
+        for tag in entry.tags:
+            by_tag[tag.lower()] += 1
+    tag_order = sorted(by_tag.keys())
+    tags = [f"[i b blue]{tag}[/] [dim]({by_tag[tag]})[/]" for tag in tag_order]
+
+    console.print(f"[b i dim blue]Untagged[/] [dim]({untagged})[/]\n", justify="center")
+    columns = Columns(tags, equal=True, expand=True)
+    console.print(columns)
 
 
 def mark():
     """
-    -f favorite
-    -r read
-    -u unread
-    -a archive
+    Not Implemented.
+
+    Mark entries with read, favorite, archive, ...
     """
-    pass
+    ...
 
-@cli.command()
-@click.argument('id')
-def edit(id):
-    if len(id) < 6:
-        print("error, must specify an id of at least 6 characters")
-        return
 
-    entries = read_entries()
+def notes():
+    """
+    Not Implemented.
 
-    none_found = True
-    for idx, e in enumerate(entries):
-        if e['id'].startswith(id):
-            with TemporaryDirectory() as dirname:
-                file_name = dirname + '/entry.toml'
-
-                with open(file_name, 'w') as f:
-                    toml.dump(e, f)
-
-                command_line=['nvim', file_name]
-                p = subprocess.Popen(command_line)
-                p.wait()
-
-                with open(file_name) as f:
-                    new_e = toml.load(f)
-
-                # todo: validate
-                entries[idx] = new_e
-
-            none_found = False
-            break
-
-    if none_found:
-        print("[yellow]no records found to delete.")
-
-    persist(entries)
-
-# functions
-#  - find by ID
-#  - filter by marks
-
-# api additions
-#  - bonk tags
-#  - bonk ls -t <tag>
+    Create a note for a particular entry.
+    """
+    ...
