@@ -14,11 +14,16 @@ from rich.panel import Panel
 from bonk import persist_json, persist_entries
 from bonk import read_json, read_entries
 from bonk.entry import Entry, user_defined_entry, NON_HUMAN_EDITABLE_FIELDS
+from bonk.marks import Marks
 
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 console = Console(soft_wrap=True)
+
+
+def error(*args):
+    print("[b red]ERROR:[/]", *args)
 
 
 def safe_sample(l, n):
@@ -157,7 +162,7 @@ def rm(id):
     try:
         idx, entry = find_by_id(entries, id)
     except ValueError as e:
-        print("[b red]ERROR:[/]", e)
+        error(e)
         return
 
     if idx is None or entry is None:
@@ -181,7 +186,7 @@ def edit(id):
     try:
         idx, entry = find_by_id(entries, id)
     except ValueError as e:
-        print("[b red]ERROR:[/]", e)
+        error(e)
         return
 
     if idx is None or entry is None:
@@ -233,7 +238,7 @@ def view(id, raw):
     try:
         idx, entry = find_by_id(entries, id)
     except ValueError as e:
-        print("[b red]ERROR:[/]", e)
+        error(e)
         return
 
     if idx is None or entry is None:
@@ -267,13 +272,41 @@ def tags():
     console.print(columns)
 
 
-def mark():
+@cli.command()
+@click.argument("id")
+@click.option("-r", "--read", is_flag=True, default=False)
+@click.option("-u", "--unread", is_flag=True, default=False)
+@click.option("-f", "--favorite", is_flag=True, default=False)
+@click.option("-a", "--archive", is_flag=True, default=False)
+def mark(id, read, unread, favorite, archive):
     """
-    Not Implemented.
-
     Mark entries with read, favorite, archive, ...
     """
-    ...
+    if read and unread:
+        error("You cannot mark as both READ and UNREAD.")
+
+    entries = read_entries()
+    try:
+        idx, entry = find_by_id(entries, id)
+    except ValueError as e:
+        error(e)
+        return
+
+    if idx is None or entry is None:
+        print("[yellow]No records found to delete.")
+        return
+
+    if read:
+        entry.mark_with('read')
+    if unread:
+        entry.mark_with('unread')
+    if favorite:
+        entry.mark_with('favorite')
+    if archive:
+        entry.mark_with('archive')
+
+    entry.validate()
+    persist_entries(entries)
 
 
 def notes():

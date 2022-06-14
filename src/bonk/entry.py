@@ -66,6 +66,19 @@ class Entry:
     def is_marked_with(self, mark: Marks):
         return mark in Marks(self.marks)
 
+    def mark_with(self, mark_type: str):
+        m = Marks(self.marks)
+        if mark_type == "read":
+            m |= Marks.READ
+        if mark_type == "unread":
+            m &= ~Marks.READ
+        if mark_type == "favorite":
+            m |= Marks.FAVORITE
+        if mark_type == "archive":
+            m |= Marks.ARCHIVE
+        self.marks = int(m)
+        self.set_updated_at()
+
     def short_view(self, show_id=False):
         if show_id:
             return f"{self.id_view}  {self.created_at_view}  {self.link_view}"
@@ -75,20 +88,20 @@ class Entry:
     @property
     def marks_view(self):
         marks = Marks(self.marks)
-        text = str()
+        mark_texts = []
 
         if Marks.READ in marks:
-            text += "📖"
+            mark_texts.append("📖 Read")
         else:
-            text += "📘"
+            mark_texts.append("📘 Unread")
 
         if Marks.FAVORITE in marks:
-            text += "⭐"
+            mark_texts.append("⭐ Favorite")
 
         if Marks.ARCHIVE in marks:
-            text += "🗄️"
+            mark_texts.append("🗄️ Archive")
 
-        return text
+        return ", ".join(mark_texts)
 
     def long_view(self):
         title = f"[dim]{self.id_view}[/]"
