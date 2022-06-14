@@ -139,8 +139,4 @@ def user_defined_entry():
 
     entry = Entry(**data)
     entry.validate()
-    entry_obj = asdict(entry)
-
-    # TODO: show long view
-
-    return entry_obj
+    return entry

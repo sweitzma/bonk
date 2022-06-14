@@ -117,7 +117,8 @@ def rand(read, favorite, num):
 def add():
     data = read_json()
     entry = user_defined_entry()
-    data.append(entry)
+    console.print(entry.long_view())
+    data.append(entry.to_dict())
     persist_json(data)
 
 
