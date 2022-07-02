@@ -6,7 +6,7 @@ from pathlib import Path
 from bonk.entry import Entry
 
 
-BONK_DIR = Path.home() / ".bonk"
+BONK_DIR = Path.home() / "Dropbox" / "bonk"
 BONK_DB_FILE = BONK_DIR / "storage.json"
 BONK_POCKET_DATA = BONK_DIR / "pocket.json"
 BONK_NOTE_DIR = BONK_DIR / "notes"
