@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from pathlib import Path
 
 from bonk.entry import Entry
@@ -7,7 +8,9 @@ from bonk.entry import Entry
 
 BONK_DIR = Path.home() / ".bonk"
 BONK_DB_FILE = BONK_DIR / "storage.json"
+BONK_POCKET_DATA = BONK_DIR / "pocket.json"
 BONK_NOTE_DIR = BONK_DIR / "notes"
+BONK_DOTENV = BONK_DIR / ".env"
 
 
 def persist_dangerous(obj):
@@ -41,6 +44,21 @@ def read_entries():
     return [Entry(**e) for e in data]
 
 
+def last_pocket_fetch():
+    with open(BONK_POCKET_DATA) as f:
+        return json.load(f)['last_retrieval']
+
+
+def bump_pocket_fetch_ts():
+    with open(BONK_POCKET_DATA, 'r') as f:
+        data = json.load(f)
+
+    data['last_retrieval'] = int(time.time())
+
+    with open(BONK_POCKET_DATA, 'w') as f:
+        json.dump(data, f, indent=2)
+
+
 # ensure bonk local storage exists
 if not BONK_DIR.exists():
     os.mkdir(BONK_DIR)
@@ -49,4 +67,9 @@ if not BONK_NOTE_DIR.exists():
     os.mkdir(BONK_NOTE_DIR)
 
 if not BONK_DB_FILE.exists():
-    persist([])
+    persist_dangerous([])
+
+if not BONK_POCKET_DATA.exists():
+    with open(BONK_POCKET_DATA, 'w') as f:
+        json.dump({"last_retrieval": 0}, f)
+

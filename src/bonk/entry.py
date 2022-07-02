@@ -132,12 +132,12 @@ def user_defined_entry():
     data["title"] = Prompt.ask("[b]Title")
     data["url"] = Prompt.ask("[b]URL")
 
-    add_tags = True
     data["tags"] = []
-    while add_tags:
-        new_tag = Prompt.ask("[b]Add tag")
+    while True:
+        new_tag = Prompt.ask("[b]Add tag[/] (or press <Enter> to stop)")
+        if len(new_tag.strip()) == 0:
+            break
         data["tags"].append(new_tag)
-        add_tags = Confirm.ask("Do you want to add another?")
 
     marks = Marks.ANY
     if Confirm.ask("Mark as read?"):

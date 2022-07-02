@@ -11,10 +11,16 @@ from rich import print
 from rich.console import Console
 from rich.panel import Panel
 
-from bonk import persist_json, persist_entries
-from bonk import read_json, read_entries
+from bonk import (
+    bump_pocket_fetch_ts,
+    persist_entries,
+    persist_json, 
+    read_entries,
+    read_json,
+)
 from bonk.entry import Entry, user_defined_entry, NON_HUMAN_EDITABLE_FIELDS
 from bonk.marks import Marks
+from bonk.pocket import fetch_and_confirm_new_pocket_entries
 
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
@@ -89,8 +95,7 @@ def cli():
 @click.option("-i", "--id", is_flag=True, default=False)
 @click.option("-t", "--with-tags", required=False, multiple=True)
 def ls(read, favorite, id, with_tags):
-    """
-    List all entries, ordered by tags.
+    """List all entries, ordered by tags.
     """
     entries = read_entries()
     all_entries_size = len(entries)
@@ -127,8 +132,7 @@ def ls(read, favorite, id, with_tags):
 @click.option("-f", "--favorite", is_flag=True, default=False)
 @click.option("-n", "--num", default=3)
 def rand(read, favorite, num):
-    """
-    Return random sample of entries.
+    """Return random sample of entries.
     """
     entries = read_entries()
     entries = filter_entries(entries, read=read, favorite=favorite)
@@ -142,8 +146,7 @@ def rand(read, favorite, num):
 
 @cli.command()
 def add():
-    """
-    Interactively add a new entry.
+    """Interactively add a new entry.
     """
     data = read_json()
     entry = user_defined_entry()
@@ -153,10 +156,27 @@ def add():
 
 
 @cli.command()
+def sync():
+    """Sync local storage with new entries saved in Pocket.
+    """
+    data = read_json()
+    entries = fetch_and_confirm_new_pocket_entries()
+
+    if len(entries) == 0:
+        print("[b]No new entries to sync!")
+        return
+
+    for entry in entries:
+        console.print(entry.long_view())
+        data.append(entry.to_dict())
+    persist_json(data)
+    bump_pocket_fetch_ts()
+
+
+@cli.command()
 @click.argument("id")
 def rm(id):
-    """
-    Delete an entry by ID.
+    """Delete an entry by ID.
     """
     entries = read_entries()
     try:
