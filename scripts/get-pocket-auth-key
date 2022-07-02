@@ -19,7 +19,7 @@ req_access_token() {
 }
 
 # load .env
-export $(cat .env | xargs)
+export $(cat $HOME/Dropbox/bonk/.env | xargs)
 
 # Step 2: Obtain a request token 
 OAUTH_CODE=$(req_oauth "$POCKET_CONSUMER_KEY" | jq -r .code)
